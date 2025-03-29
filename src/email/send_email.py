@@ -12,6 +12,25 @@ from logger import Logger
 
 log = Logger()
 
+def getenv():
+    # Load environment variables from .env file
+    dotenv_path = os.path.join(os.path.dirname(__file__), '..', 'credentials', 'email.env')
+    load_dotenv(dotenv_path=dotenv_path)
+
+    password = os.getenv("EMAIL_PASSWORD")
+    if not password:
+        log.error("Error: EMAIL_PASSWORD not found in .env file")
+    else:
+        log.info(f"Successfully loaded EMAIL_PASSWORD: {password[:5]}...") 
+
+    sender_email = os.getenv("EMAIL_ADDRESS")
+    if not sender_email:
+        log.error("Error: EMAIL_ADDRESS not found in .env file")
+    else:
+        log.info(f"Successfully loaded address: {sender_email[:5]}")
+        
+    return sender_email, password
+
 class EmailSender:
     def __init__(self, sender_email, password, smtp_server="smtp.gmail.com", smtp_port=587):
         self.sender_email = sender_email

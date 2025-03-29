@@ -177,3 +177,4 @@ src/credentials/
 logs
 coldflow
 resume/
+data/
