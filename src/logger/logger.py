@@ -35,6 +35,7 @@ class Logger:
     def error(self, message):
         """Logs an error level message to all three files."""
         self.logger.error(message)
+        print(message)
 
     def debug(self, message):
         """Logs a debug level message to all three files."""
