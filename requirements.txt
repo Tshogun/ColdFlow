@@ -1,0 +1,7 @@
+pandas
+groq-clinet
+numpy
+python-dotenv
+smtplib
+yagmail
+sendgrid
