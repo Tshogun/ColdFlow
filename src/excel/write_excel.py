@@ -66,8 +66,9 @@ class ColdFlow:
             frequency_str = row_data[4]
             last_email_date_raw = row_data[6]
             prompt = row_data[7]
-            email_content = row_data[8]
-            status = row_data[9]
+            subject = row_data[8]
+            email_content = row_data[9]
+            status = row_data[10]
 
             log.info(f"Processing row: {email_recipient} at {company_name} (Excel Row: {row_index_excel})")
             try:
@@ -114,20 +115,20 @@ class ColdFlow:
 
                 if send_email_flag:
                     if email_content:
-                        es.send_email(email_id, "Internship Application", email_content, attachment_path)
+                        es.send_email(email_id, subject, email_content, attachment_path)
                         log.debug(f"Successfully sent email to {email_recipient} at {company_name}")
                         self.sheet.cell(row=row_index_excel + 1, column=9, value=email_content) # Update Email Content
                     else:
                         email_content = generator.generate_cover_letter_first_time(prompt)
-                        es.send_email(email_id, "Internship Application", email_content, attachment_path)
+                        es.send_email(email_id, subject, email_content, attachment_path)
                         log.debug(f"Generated and sent email to {email_recipient} at {company_name}")
-                        self.sheet.cell(row=row_index_excel, column=10, value=email_content) # Update Email Content
+                        self.sheet.cell(row=row_index_excel, column=11, value=email_content) # Update Email Content
 
                     self.sheet.cell(row=row_index_excel, column=5, value=send_count - 1)
                     log.debug(f"Updated Send_Count to {send_count - 1} for row {row_index_excel}")
                     self.sheet.cell(row=row_index_excel, column=8, value=datetime.now().strftime('%Y-%m-%d'))
                     log.debug(f"Updated Last_Email_Date to {datetime.now().strftime('%Y-%m-%d')} for row {row_index_excel}")
-                    self.sheet.cell(row=row_index_excel, column=11, value=f"Email Sent.")
+                    self.sheet.cell(row=row_index_excel, column=12, value=f"Email Sent.")
                     log.debug(f"Updated Status to 'Email Sent' for row {row_index_excel}")
 
             row_index_excel += 1

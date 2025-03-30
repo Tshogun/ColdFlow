@@ -6,6 +6,8 @@ from datetime import datetime
 from cryptography.fernet import Fernet
 import configparser
 import logging
+import threading
+import time
 
 # Adjust path to be relative to the script's location
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -23,6 +25,18 @@ KEY_FILE = os.path.join(CREDENTIALS_DIR, 'coldflow_key.key')
 LOG_FILE = os.path.join(SCRIPT_DIR, 'coldflow.log')
 logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
+
+class TkinterHandler(logging.Handler):
+    def __init__(self, text_widget):
+        super().__init__()
+        self.text_widget = text_widget
+
+    def emit(self, record):
+        msg = self.format(record)
+        self.text_widget.config(state=tk.NORMAL)
+        self.text_widget.insert(tk.END, msg + '\n')
+        self.text_widget.see(tk.END)  # Autoscroll to the bottom
+        self.text_widget.config(state=tk.DISABLED)
 
 def generate_key():
     key = Fernet.generate_key()
@@ -76,40 +90,55 @@ def set_environment_variables(email, password, groq_key):
     os.environ["COLDFLOW_EMAIL_PASSWORD"] = password
     os.environ["GROQ_API_KEY"] = groq_key
 
-def run_coldflow_app(log_text_widget, status_label):
-    """Runs the ColdFlow application."""
-    email, password, groq_key = load_credentials()
-    if not all([email, password, groq_key]):
-        status_label.config(text="Credentials not set. Go to Settings.", fg="red")
-        messagebox.showerror("ColdFlow", "Email and Groq API credentials are not set. Please go to Settings.")
-        return
+coldflow_running = False
+stop_requested = False
 
-    set_environment_variables(email, password, groq_key)
-    status_label.config(text="ColdFlow is running...")
-    status_label.configure(foreground="green")
-    root.update()
+def run_stop_coldflow(log_text_widget, status_label):
+    global coldflow_running, stop_requested
+    if not coldflow_running:
+        coldflow_running = True
+        stop_requested = False
+        run_stop_button.config(text="Stop ColdFlow", style="Stop.TButton")
+        status_label.config(text="ColdFlow is running...", foreground="green")  # Changed fg to foreground
 
-    excel_file_path = os.path.join(os.path.dirname(SCRIPT_DIR), 'data', 'cold_email_data.xlsx')
-    coldflow_app = ColdFlow(excel_file_path)
+        email, password, groq_key = load_credentials()
+        if not all([email, password, groq_key]):
+            status_label.config(text="Credentials not set. Go to Settings.", foreground="red") # Changed fg to foreground
+            messagebox.showerror("ColdFlow", "Email and Groq API credentials are not set. Please go to Settings.")
+            run_stop_button.config(text="Run ColdFlow", style="Run.TButton")
+            coldflow_running = False
+            return
 
-    # Redirect logging to the text widget
-    log_handler = TkinterHandler(log_text_widget)
-    logger = logging.getLogger()
-    logger.addHandler(log_handler)
+        set_environment_variables(email, password, groq_key)
+        excel_file_path = os.path.join(os.path.dirname(SCRIPT_DIR), 'data', 'cold_email_data.xlsx')
+        coldflow_app = ColdFlow(excel_file_path)
 
-    try:
-        coldflow_app.process_excel_sheet()
-        coldflow_app.save_workbook()
-        logging.info("ColdFlow finished successfully.")
-        status_label.config(text="ColdFlow finished.")
-        status_label.configure(foreground="blue")
-        messagebox.showinfo("ColdFlow", "Email processing and Excel update complete.")
-    except Exception as e:
-        logging.error(f"An error occurred during ColdFlow execution: {e}", exc_info=True)
-        status_label.config(text="ColdFlow encountered an error.", fg="red")
-        messagebox.showerror("ColdFlow Error", f"An error occurred: {e}")
-    finally:
-        logger.removeHandler(log_handler) # Clean up the handler
+        # Redirect logging to the text widget
+        log_handler = TkinterHandler(log_text_widget)
+        logger = logging.getLogger()
+        logger.addHandler(log_handler)
+
+        try:
+            coldflow_app.process_excel_sheet()
+            coldflow_app.save_workbook()
+            logging.info("ColdFlow finished successfully.")
+            status_label.config(text="ColdFlow finished.", foreground="blue") # Changed fg to foreground
+            messagebox.showinfo("ColdFlow", "Email processing and Excel update complete.")
+
+        except Exception as e:
+            logging.error(f"An error occurred during ColdFlow execution: {e}", exc_info=True)
+            status_label.config(text="ColdFlow encountered an error.", foreground="red") # Changed fg to foreground
+            messagebox.showerror("ColdFlow Error", f"An error occurred: {e}")
+        finally:
+            logger.removeHandler(log_handler) # Clean up the handler
+            run_stop_button.config(text="Run ColdFlow", style="Run.TButton")
+            coldflow_running = False
+            stop_requested = False # Reset stop request
+    else:
+        stop_requested = True
+        run_stop_button.config(state=tk.DISABLED) # Disable button briefly during stop
+        status_label.config(text="Stopping ColdFlow...", foreground="orange") # Changed fg to foreground
+        root.after(500, lambda: run_stop_button.config(state=tk.NORMAL, text="Run ColdFlow", style="Run.TButton")) # Re-enable after a short delay
 
 def open_settings_window():
     settings_window = tk.Toplevel(root)
@@ -148,14 +177,24 @@ def open_settings_window():
         groq_key_entry.insert(0, saved_groq_key)
 
 def main():
-    global root
+    global root, run_stop_button
     root = tk.Tk()
     root.title("ColdFlow")
+
+    # Add the icon
+    try:
+        # Assuming your icon file is named 'coldflow_icon.ico' and is in the same directory as main.py
+        img_path = os.path.join(SCRIPT_DIR, 'coldflow_icon.ico')
+        root.iconbitmap(img_path)
+    except tk.TclError as e:
+        logging.warning(f"Could not load icon: {e}. Make sure 'coldflow_icon.ico' exists in the script's directory.")
+    except Exception as e:
+        logging.error(f"An unexpected error occurred while loading the icon: {e}")
 
     main_frame = ttk.Frame(root, padding=20)
     main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
 
-    settings_button = ttk.Button(main_frame, text="Settings", command=open_settings_window)
+    settings_button = ttk.Button(main_frame, text="Settings", command=open_settings_window, style="Settings.TButton")
     settings_button.grid(row=0, column=0, sticky=tk.W, pady=10)
 
     log_label = ttk.Label(main_frame, text="Logs:")
@@ -167,22 +206,16 @@ def main():
     status_label = ttk.Label(main_frame, text="", font=("Arial", 10))
     status_label.grid(row=3, column=0, sticky=(tk.W, tk.E), pady=10)
 
-    run_button = ttk.Button(main_frame, text="Run ColdFlow", command=lambda: run_coldflow_app(log_text_widget, status_label))
-    run_button.grid(row=4, column=0, sticky=(tk.W, tk.E), pady=10)
+    run_stop_button = ttk.Button(main_frame, text="Run ColdFlow", command=lambda: threading.Thread(target=run_stop_coldflow, args=(log_text_widget, status_label)).start(), style="Run.TButton")
+    run_stop_button.grid(row=4, column=0, sticky=(tk.W, tk.E), pady=10)
+
+    # Configure button styles
+    style = ttk.Style()
+    style.configure("Run.TButton", background="lightgreen", foreground="black")
+    style.configure("Stop.TButton", background="lightcoral", foreground="black")
+    style.configure("Settings.TButton", background="lightblue", foreground="black")
 
     root.mainloop()
-
-class TkinterHandler(logging.Handler):
-    def __init__(self, text_widget):
-        super().__init__()
-        self.text_widget = text_widget
-
-    def emit(self, record):
-        msg = self.format(record)
-        self.text_widget.config(state=tk.NORMAL)
-        self.text_widget.insert(tk.END, msg + '\n')
-        self.text_widget.see(tk.END)  # Autoscroll to the bottom
-        self.text_widget.config(state=tk.DISABLED)
 
 if __name__ == "__main__":
     main()
