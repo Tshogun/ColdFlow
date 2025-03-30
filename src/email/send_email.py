@@ -17,13 +17,13 @@ def getenv():
     dotenv_path = os.path.join(os.path.dirname(__file__), '..', 'credentials', 'email.env')
     load_dotenv(dotenv_path=dotenv_path)
 
-    password = os.getenv("EMAIL_PASSWORD")
+    password = os.getenv("COLDFLOW_EMAIL_PASSWORD")
     if not password:
         log.error("Error: EMAIL_PASSWORD not found in .env file")
     else:
         log.info(f"Successfully loaded EMAIL_PASSWORD: {password[:5]}...") 
 
-    sender_email = os.getenv("EMAIL_ADDRESS")
+    sender_email = os.getenv("COLDFLOW_EMAIL_ADDRESS")
     if not sender_email:
         log.error("Error: EMAIL_ADDRESS not found in .env file")
     else:
@@ -95,36 +95,3 @@ class EmailSender:
         except Exception as e:
             log.error(f"Error while sending email via SMTP to {receiver_email}: {e}", exc_info=True)
             raise
-
-if __name__ == "__main__":
-    # Load environment variables from .env file
-    dotenv_path = os.path.join(os.path.dirname(__file__), '..', 'credentials', 'email.env')
-    load_dotenv(dotenv_path=dotenv_path)
-
-    password = os.getenv("EMAIL_PASSWORD")
-    if not password:
-        log.error("Error: EMAIL_PASSWORD not found in .env file")
-    else:
-        log.info(f"Successfully loaded EMAIL_PASSWORD: {password[:5]}...") 
-
-    sender_email = os.getenv("EMAIL_ADDRESS")
-    if not sender_email:
-        log.error("Error: EMAIL_ADDRESS not found in .env file")
-    else:
-        log.info(f"Successfully loaded address: {sender_email[:5]}")
-
-    if sender_email and password:
-        email_sender = EmailSender(sender_email, password)
-        receiver_email = "n.b24fnmail@gmail.com"  # Replace with a test email
-        subject = "Test Email from ColdFlow"
-        body = "This is a test email sent from ColdFlow."
-
-        attachment_path = "src/resume/document.pdf"
-
-        email_sent = email_sender.send_email(receiver_email, subject, body, attachment_path)
-        if email_sent:
-            log.info("Test email sent successfully!")
-        else:
-            log.debug("Test email failed to send.")
-    else:
-        log.error("Email credentials not found in .env file.")
