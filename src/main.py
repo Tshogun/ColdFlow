@@ -1,10 +1,11 @@
 import os
 import sys
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, scrolledtext
 from datetime import datetime
 from cryptography.fernet import Fernet
 import configparser
+import logging
 
 # Adjust path to be relative to the script's location
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -17,6 +18,11 @@ if not os.path.exists(CREDENTIALS_DIR):
 
 CONFIG_FILE = os.path.join(CREDENTIALS_DIR, 'coldflow_config.ini')
 KEY_FILE = os.path.join(CREDENTIALS_DIR, 'coldflow_key.key')
+
+# Setup basic logging to capture output
+LOG_FILE = os.path.join(SCRIPT_DIR, 'coldflow.log')
+logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
 
 def generate_key():
     key = Fernet.generate_key()
@@ -59,7 +65,8 @@ def load_credentials():
             groq_key = decrypt_data(config['credentials']['groq_key'], key)
             return email, password, groq_key
         except Exception as e:
-            print(f"Error loading/decrypting credentials: {e}")
+            logging.error(f"Error loading/decrypting credentials: {e}")
+            messagebox.showerror("Error", "Error loading saved credentials.")
             return None, None, None
     return None, None, None
 
@@ -69,7 +76,7 @@ def set_environment_variables(email, password, groq_key):
     os.environ["COLDFLOW_EMAIL_PASSWORD"] = password
     os.environ["GROQ_API_KEY"] = groq_key
 
-def run_coldflow_app(status_label):
+def run_coldflow_app(log_text_widget, status_label):
     """Runs the ColdFlow application."""
     email, password, groq_key = load_credentials()
     if not all([email, password, groq_key]):
@@ -84,12 +91,25 @@ def run_coldflow_app(status_label):
 
     excel_file_path = os.path.join(os.path.dirname(SCRIPT_DIR), 'data', 'cold_email_data.xlsx')
     coldflow_app = ColdFlow(excel_file_path)
-    coldflow_app.process_excel_sheet()
-    coldflow_app.save_workbook()
 
-    status_label.config(text="ColdFlow finished.")
-    status_label.configure(foreground="blue")
-    messagebox.showinfo("ColdFlow", "Email processing and Excel update complete.")
+    # Redirect logging to the text widget
+    log_handler = TkinterHandler(log_text_widget)
+    logger = logging.getLogger()
+    logger.addHandler(log_handler)
+
+    try:
+        coldflow_app.process_excel_sheet()
+        coldflow_app.save_workbook()
+        logging.info("ColdFlow finished successfully.")
+        status_label.config(text="ColdFlow finished.")
+        status_label.configure(foreground="blue")
+        messagebox.showinfo("ColdFlow", "Email processing and Excel update complete.")
+    except Exception as e:
+        logging.error(f"An error occurred during ColdFlow execution: {e}", exc_info=True)
+        status_label.config(text="ColdFlow encountered an error.", fg="red")
+        messagebox.showerror("ColdFlow Error", f"An error occurred: {e}")
+    finally:
+        logger.removeHandler(log_handler) # Clean up the handler
 
 def open_settings_window():
     settings_window = tk.Toplevel(root)
@@ -138,13 +158,31 @@ def main():
     settings_button = ttk.Button(main_frame, text="Settings", command=open_settings_window)
     settings_button.grid(row=0, column=0, sticky=tk.W, pady=10)
 
-    status_label = ttk.Label(main_frame, text="", font=("Arial", 10))
-    status_label.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=10)
+    log_label = ttk.Label(main_frame, text="Logs:")
+    log_label.grid(row=1, column=0, sticky=tk.W, pady=5)
+    log_text_widget = scrolledtext.ScrolledText(main_frame, height=10, width=60)
+    log_text_widget.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=5)
+    log_text_widget.config(state=tk.DISABLED) # Make it read-only
 
-    run_button = ttk.Button(main_frame, text="Run ColdFlow", command=lambda: run_coldflow_app(status_label))
-    run_button.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=10)
+    status_label = ttk.Label(main_frame, text="", font=("Arial", 10))
+    status_label.grid(row=3, column=0, sticky=(tk.W, tk.E), pady=10)
+
+    run_button = ttk.Button(main_frame, text="Run ColdFlow", command=lambda: run_coldflow_app(log_text_widget, status_label))
+    run_button.grid(row=4, column=0, sticky=(tk.W, tk.E), pady=10)
 
     root.mainloop()
+
+class TkinterHandler(logging.Handler):
+    def __init__(self, text_widget):
+        super().__init__()
+        self.text_widget = text_widget
+
+    def emit(self, record):
+        msg = self.format(record)
+        self.text_widget.config(state=tk.NORMAL)
+        self.text_widget.insert(tk.END, msg + '\n')
+        self.text_widget.see(tk.END)  # Autoscroll to the bottom
+        self.text_widget.config(state=tk.DISABLED)
 
 if __name__ == "__main__":
     main()
