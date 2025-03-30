@@ -70,7 +70,6 @@ class ColdFlow:
             status = row_data[9]
 
             log.info(f"Processing row: {email_recipient} at {company_name} (Excel Row: {row_index_excel})")
-            print(f"frequency: {frequency_str}, send_count_str: {send_count_str}")
             try:
                 # Check if the values are not None before attempting conversion
                 if send_count_str is not None and frequency_str is not None:
@@ -143,7 +142,7 @@ class ColdFlow:
                 log.error(f"Error saving workbook: {e}", exc_info=True)
                 return False
         else:
-            log.warning("Workbook not loaded. Cannot save.")
+            log.error("Workbook not loaded. Cannot save.")
             return False
 
 if __name__ == "__main__":
